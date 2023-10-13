@@ -10,6 +10,7 @@
 ## Resources
 - Mailing list archives highlighting the bug: https://lore.kernel.org/all/7536b9e1-de7a-a492-6951-485d4eb75df1@163.com/T/#u
 - UBoot mailing list discussing a potential fix: https://lists.denx.de/pipermail/u-boot/2023-July/524187.html
+- Suggested debugging technique based on crash dump: https://lore.kernel.org/all/20230722002652.220ae94d@xps-13/t/#u
 
 
 ## Scenario
