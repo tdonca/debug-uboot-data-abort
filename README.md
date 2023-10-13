@@ -16,22 +16,72 @@
 ## Scenario
 - Multiple TFTP transfers causes data abort error:
 ```
-Using usb_ether device
-TFTP from server 192.168.0.1; our IP address is 192.168.0.100
-Filename 'am335x-boneblack.dtb'.
-Load address: 0x82000000
-Loading: ##################################################  68.3 KiB
-         4.2 MiB/s
+Filename 'testfile.txt'.
+Load address: 0x80000000
+Loading: ##################################################  11 Bytes
+         1000 Bytes/s
 done
-Bytes transferred = 69937 (11131 hex)
+Bytes transferred = 11 (b hex)
+=> 
+---- Sent utf8 encoded message: "\n" ----
+
 data abort
-pc : [<9ff7b00a>]          lr : [<9ff74f81>]
-reloc pc : [<8081c00a>]    lr : [<80815f81>]
-sp : 9df299f8  ip : 00000020     fp : 00000003
-r10: 9df29a60  r9 : 9df3eea0     r8 : 00000200
-r7 : 00000003  r6 : 00000010     r5 : 9ffdb3fc  r4 : 0000000c
-r3 : 00000010  r2 : 9df4a900     r1 : 00000001  r0 : 9df4c418
+pc : [<9ff7f2a8>]          lr : [<9ffdbfbc>]
+reloc pc : [<8081c2a8>]    lr : [<80878fbc>]
+sp : 9df2d980  ip : 9ffdbfbc     fp : 9df5c0d4
+r10: 9df4f9e4  r9 : 9df42ea0     r8 : 00000080
+r7 : 00000024  r6 : 00000001     r5 : 9ffdbe9c  r4 : 00000120
+r3 : 9ffdbf00  r2 : 9df506c0     r1 : 9ffdbea4  r0 : 9df50620
 Flags: Nzcv  IRQs off  FIQs on  Mode SVC_32 (T)
-Code: 68c2 6881 f023 0303 (60ca) 4403 
+Code: 0601 68c3 6046 6886 (60f3) 609e 
 Resetting CPU ...
 ```
+
+## U-boot usb-ethernet config
+```
+=> setenv ipaddr 192.168.0.100
+=> setenv serverip 192.168.0.1
+=> setenv ethprime usb_ether
+=> setenv usbnet_devaddr f8:dc:7a:00:00:02
+=> setenv usbnet_hostaddr f8:dc:7a:00:00:01
+=> saveenv
+```
+
+## Host usb-ethernet config
+
+```
+$ nmcli con add type ethernet ifname enxf8dc7a000001 ip4 192.168.0.1/24
+```
+
+# Debugging
+
+Referencing `u-boot.map` file:
+We have: 
+```
+pc : [<9ff7f2a8>]          lr : [<9ffdbfbc>]
+reloc pc : [<8081c2a8>]    lr : [<80878fbc>]
+```
+
+Unpacking the u-boot binary at the relevant addresses:
+- Dump object file data: `${CROSS_COMPILE}objdump -lS ${BUILDDIR}/u-boot`
+- Filter for just our relevant `pc` and `lr` addresses: 
+  - `${CROSS_COMPILE}objdump -lS ${BUILDDIR}/u-boot | grep -A 10 -B 20 8081c2a8`
+  - `${CROSS_COMPILE}objdump -lS ${BUILDDIR}/u-boot | grep -A 10 -B 20 80878fbc`
+
+The resulting instructions show a bad memory access during `malloc` operations:
+```
+/home/tudor/dev/embedded_linux/debug-uboot-data-abort/u-boot/common/dlmalloc.c:1464
+            unlink(victim, bck, fwd);
+8081c2a2:       68c3            ldr     r3, [r0, #12]
+/home/tudor/dev/embedded_linux/debug-uboot-data-abort/u-boot/common/dlmalloc.c:1463
+            set_head(victim, nb | PREV_INUSE);
+8081c2a4:       6046            str     r6, [r0, #4]
+/home/tudor/dev/embedded_linux/debug-uboot-data-abort/u-boot/common/dlmalloc.c:1464
+            unlink(victim, bck, fwd);
+8081c2a6:       6886            ldr     r6, [r0, #8]
+8081c2a8:       60f3            str     r3, [r6, #12]
+8081c2aa:       609e            str     r6, [r3, #8]
+```
+
+Hinting at some related "use after free" or "double free" bug.
+
