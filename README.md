@@ -55,12 +55,22 @@ $ nmcli con add type ethernet ifname enxf8dc7a000001 ip4 192.168.0.1/24
 
 # Debugging
 
-Referencing `u-boot.map` file:
-We have: 
+We have the following crash dump: 
 ```
 pc : [<9ff7f2a8>]          lr : [<9ffdbfbc>]
 reloc pc : [<8081c2a8>]    lr : [<80878fbc>]
 ```
+
+Referencing the `u-boot.map` file:
+```
+ .text.free     0x8081bde8      0x16c common/dlmalloc.o
+                0x8081bde8                free
+ .text.malloc   0x8081bf54      0x418 common/dlmalloc.o
+                0x8081bf54                malloc
+ .text.calloc   0x8081c36c       0x9c common/dlmalloc.o
+                0x8081c36c                calloc
+```
+Shows that the crash happens in the `malloc` function.  
 
 Unpacking the u-boot binary at the relevant addresses:
 - Dump object file data: `${CROSS_COMPILE}objdump -lS ${BUILDDIR}/u-boot`
